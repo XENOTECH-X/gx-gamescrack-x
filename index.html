@@ -24,7 +24,7 @@
    raw.githack.com and rawcdn.githack.com).
    Applies to the launcher AND every game/app iframe, worker and popup. */
 window.GX_BLOCKED_SITES = [
-  'useast2-www.securly.com',
+  'githack.com',
   // 'example.com',
 ];
 /* =========================================================== */
@@ -351,6 +351,17 @@ async function gxFetchFromSources(directory, file) {
             return { response: res, url, source, repo };
           }
           lastErr = new Error(`HTTP ${res.status} from ${source}/${repo}`);
+          // Alt load: jsDelivr 403 (e.g. file too big) -> try raw GitHub for this
+          // same source/repo right away instead of walking every jsDelivr repo first.
+          if (cdn && res.status === 403 && window.__gxAltLoad) {
+            try {
+              const { response: r2, url: u2 } = await gxFetchUrl(mk(false, source, repo));
+              if (r2.ok) {
+                gxRepoHintSet(directory, repo);
+                return { response: r2, url: u2, source, repo };
+              }
+            } catch (e2) { lastErr = e2; }
+          }
         } catch (err) {
           lastErr = err;
         }
@@ -373,6 +384,12 @@ async function gxFetchAppFromSources(directory, file) {
       const { response: res, url: finalUrl } = await gxFetchUrl(url);
       if (res.ok) return { response: res, url: finalUrl, source };
       lastErr = new Error(`HTTP ${res.status} from ${source}`);
+      if (res.status === 403 && window.__gxAltLoad) {
+        try {
+          const { response: r2, url: u2 } = await gxFetchUrl(gxBuildAppRawUrl(source, directory, file));
+          if (r2.ok) return { response: r2, url: u2, source };
+        } catch (e2) { lastErr = e2; }
+      }
     } catch (err) {
       lastErr = err;
     }
@@ -640,7 +657,50 @@ function install(w){
   try{new w.PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(bad(e.name))console.error('[blocked-site LEAK] request got through:',e.name,e.initiatorType);});}).observe({type:'resource',buffered:true});}catch(e){}
 }
 install(window);
-})(${JSON.stringify(window.GX_BLOCKED_SITES||[])});<\/script>`;
+})(${JSON.stringify(window.GX_BLOCKED_SITES||[])});<\/script><script>(function(){
+if(window.__gxRaw403)return;window.__gxRaw403=1;
+var JD=/^https:\\/\\/cdn\\.jsdelivr\\.net\\/gh\\/([^\\/]+)\\/([^\\/@]+)(?:@[^\\/]+)?\\/(.+)$/i;
+function toRaw(u){try{if(u==null||u==='')return null;var a=new URL(String(u),document.baseURI).href;var m=JD.exec(a);return m?'https://raw.githubusercontent.com/'+m[1]+'/'+m[2]+'/refs/heads/main/'+m[3]:null;}catch(e){return null;}}
+function warn(a,b){try{console.warn('[raw fallback] jsDelivr failed, retrying via raw.githubusercontent.com:',a);}catch(e){}}
+var F=window.fetch;
+if(F)window.fetch=function(i,o){
+  var u=(i&&i.url)||i,raw=toRaw(u),p=F.apply(this,arguments);
+  if(!raw)return p;
+  function retry(){warn(u);var ni;try{ni=(i&&i.url)?new Request(raw,i):raw;}catch(e){ni=raw;}return F.call(window,ni,o);}
+  return p.then(function(r){return(r&&r.status===403)?retry():r;},function(err){return retry().catch(function(){throw err;});});
+};
+var P=window.XMLHttpRequest&&XMLHttpRequest.prototype;
+if(P&&F){
+  var XO=P.open,XS=P.send,XH=P.setRequestHeader;
+  P.open=function(m,u,a){this.__gx={m:m,u:u,a:a!==false,h:[]};return XO.apply(this,arguments);};
+  P.setRequestHeader=function(k,v){if(this.__gx)this.__gx.h.push([k,v]);return XH.apply(this,arguments);};
+  P.send=function(){
+    var st=this.__gx,x=this,args=arguments,raw=st&&toRaw(st.u);
+    if(!st||!st.a||!raw||String(st.m).toUpperCase()!=='GET')return XS.apply(this,arguments);
+    function go(){try{return XS.apply(x,args);}catch(e){}}
+    F.call(window,st.u,{method:'HEAD'}).then(function(r){
+      if(r&&r.status===403){
+        warn(st.u);
+        var rt=x.responseType,wc=x.withCredentials,to=x.timeout;
+        XO.call(x,st.m,raw,true);
+        try{x.responseType=rt;x.withCredentials=wc;x.timeout=to;}catch(e){}
+        st.h.forEach(function(h){try{XH.call(x,h[0],h[1]);}catch(e){}});
+      }
+      go();
+    },go);
+  };
+}
+try{document.addEventListener('error',function(e){
+  var t=e.target;if(!t||!t.tagName||t.__gxR)return;
+  var tn=t.tagName,a=(tn==='LINK')?'href':'src';
+  if(['SCRIPT','IMG','LINK','AUDIO','VIDEO','SOURCE'].indexOf(tn)<0)return;
+  var raw=toRaw(t.getAttribute&&t.getAttribute(a));if(!raw)return;
+  t.__gxR=1;warn(t.getAttribute(a));
+  if(tn==='SCRIPT'){var n=document.createElement('script');for(var i=0;i<t.attributes.length;i++){try{n.setAttribute(t.attributes[i].name,t.attributes[i].value);}catch(x){}}n.setAttribute('src',raw);n.__gxR=1;if(t.parentNode)t.parentNode.insertBefore(n,t.nextSibling);return;}
+  t.setAttribute(a,raw);
+  if(tn==='SOURCE'&&t.parentNode&&t.parentNode.load)try{t.parentNode.load();}catch(x){}
+},true);}catch(e){}
+})();<\/script>`;
 
   function withBaseAndPolyfill(html, baseHref) {
     html = window.GX_blockRewrite(html);
@@ -719,7 +779,9 @@ install(window);
   async function openAsBlob(g, popup) {
     statusLine.innerHTML = `FETCHING <span class="hl">` + g.name.toUpperCase() + `</span>...`;
     try {
-      const html = await fetchGameHtml(g);
+      window.__gxAltLoad = true;
+      let html;
+      try { html = await fetchGameHtml(g); } finally { window.__gxAltLoad = false; }
       const blob = new Blob([html], { type: `text/html` });
       const url = URL.createObjectURL(blob);
       if (popup) {
@@ -1011,7 +1073,50 @@ function install(w){
   try{new w.PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(bad(e.name))console.error('[blocked-site LEAK] request got through:',e.name,e.initiatorType);});}).observe({type:'resource',buffered:true});}catch(e){}
 }
 install(window);
-})(${JSON.stringify(window.GX_BLOCKED_SITES||[])});<\/script>`;
+})(${JSON.stringify(window.GX_BLOCKED_SITES||[])});<\/script><script>(function(){
+if(window.__gxRaw403)return;window.__gxRaw403=1;
+var JD=/^https:\\/\\/cdn\\.jsdelivr\\.net\\/gh\\/([^\\/]+)\\/([^\\/@]+)(?:@[^\\/]+)?\\/(.+)$/i;
+function toRaw(u){try{if(u==null||u==='')return null;var a=new URL(String(u),document.baseURI).href;var m=JD.exec(a);return m?'https://raw.githubusercontent.com/'+m[1]+'/'+m[2]+'/refs/heads/main/'+m[3]:null;}catch(e){return null;}}
+function warn(a,b){try{console.warn('[raw fallback] jsDelivr failed, retrying via raw.githubusercontent.com:',a);}catch(e){}}
+var F=window.fetch;
+if(F)window.fetch=function(i,o){
+  var u=(i&&i.url)||i,raw=toRaw(u),p=F.apply(this,arguments);
+  if(!raw)return p;
+  function retry(){warn(u);var ni;try{ni=(i&&i.url)?new Request(raw,i):raw;}catch(e){ni=raw;}return F.call(window,ni,o);}
+  return p.then(function(r){return(r&&r.status===403)?retry():r;},function(err){return retry().catch(function(){throw err;});});
+};
+var P=window.XMLHttpRequest&&XMLHttpRequest.prototype;
+if(P&&F){
+  var XO=P.open,XS=P.send,XH=P.setRequestHeader;
+  P.open=function(m,u,a){this.__gx={m:m,u:u,a:a!==false,h:[]};return XO.apply(this,arguments);};
+  P.setRequestHeader=function(k,v){if(this.__gx)this.__gx.h.push([k,v]);return XH.apply(this,arguments);};
+  P.send=function(){
+    var st=this.__gx,x=this,args=arguments,raw=st&&toRaw(st.u);
+    if(!st||!st.a||!raw||String(st.m).toUpperCase()!=='GET')return XS.apply(this,arguments);
+    function go(){try{return XS.apply(x,args);}catch(e){}}
+    F.call(window,st.u,{method:'HEAD'}).then(function(r){
+      if(r&&r.status===403){
+        warn(st.u);
+        var rt=x.responseType,wc=x.withCredentials,to=x.timeout;
+        XO.call(x,st.m,raw,true);
+        try{x.responseType=rt;x.withCredentials=wc;x.timeout=to;}catch(e){}
+        st.h.forEach(function(h){try{XH.call(x,h[0],h[1]);}catch(e){}});
+      }
+      go();
+    },go);
+  };
+}
+try{document.addEventListener('error',function(e){
+  var t=e.target;if(!t||!t.tagName||t.__gxR)return;
+  var tn=t.tagName,a=(tn==='LINK')?'href':'src';
+  if(['SCRIPT','IMG','LINK','AUDIO','VIDEO','SOURCE'].indexOf(tn)<0)return;
+  var raw=toRaw(t.getAttribute&&t.getAttribute(a));if(!raw)return;
+  t.__gxR=1;warn(t.getAttribute(a));
+  if(tn==='SCRIPT'){var n=document.createElement('script');for(var i=0;i<t.attributes.length;i++){try{n.setAttribute(t.attributes[i].name,t.attributes[i].value);}catch(x){}}n.setAttribute('src',raw);n.__gxR=1;if(t.parentNode)t.parentNode.insertBefore(n,t.nextSibling);return;}
+  t.setAttribute(a,raw);
+  if(tn==='SOURCE'&&t.parentNode&&t.parentNode.load)try{t.parentNode.load();}catch(x){}
+},true);}catch(e){}
+})();<\/script>`;
 
   function withBaseAndPolyfill(html, baseHref) {
     html = window.GX_blockRewrite(html);
@@ -1085,7 +1190,9 @@ install(window);
   async function openAsBlob(a, popup) {
     statusLine.innerHTML = `FETCHING <span class="hl">` + a.name.toUpperCase() + `</span>...`;
     try {
-      const html = await fetchAppHtml(a);
+      window.__gxAltLoad = true;
+      let html;
+      try { html = await fetchAppHtml(a); } finally { window.__gxAltLoad = false; }
       const blob = new Blob([html], { type: `text/html` });
       const url = URL.createObjectURL(blob);
       if (popup) {
