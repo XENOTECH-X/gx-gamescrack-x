@@ -222,8 +222,17 @@ let form=document.createElement(`form`);form.action=`https://docs.google.com/for
 // Each entry is just the GitHub org/user name. All mirrors are
 // expected to have the same 5 repos: 1-0, a-f, g-l, m-r, s-z.
 const GX_SOURCES = [
-  "gx-resources"
-  // "example-alt",
+  "gx-resources",
+  "gx-alt1",
+  "gx-alt2",
+  "gx-alt3",
+  "gx-alt4",
+  "gx-alt5",
+  "gx-alt6",
+  "gx-alt7",
+  "gx-alt8",
+  "gx-alt9",
+  "gx-alt10"
 ];
 
 const GX_REPO_NAMES = ["1-0", "a-f", "g-l", "m-r", "s-z"];
@@ -340,9 +349,13 @@ async function gxFetchFromSources(directory, file) {
       : `https://raw.githubusercontent.com/${source}/${repo}/refs/heads/main/${path}?t=${Date.now()}`;
   };
 
+  const tried = new Set();
   for (const cdn of [true, false]) {
     for (const source of GX_SOURCES) {
       for (const repo of repos) {
+        const tk = cdn + "|" + source + "|" + repo;
+        if (tried.has(tk)) continue;
+        tried.add(tk);
         const target = mk(cdn, source, repo);
         try {
           const { response: res, url } = await gxFetchUrl(target);
@@ -351,6 +364,24 @@ async function gxFetchFromSources(directory, file) {
             return { response: res, url, source, repo };
           }
           lastErr = new Error(`HTTP ${res.status} from ${source}/${repo}`);
+          // Rate limited (429): try this same repo on the other sources right
+          // away (same CDN) instead of walking the rest of this source's repos.
+          if (res.status === 429) {
+            for (const alt of GX_SOURCES) {
+              if (alt === source) continue;
+              const ak = cdn + "|" + alt + "|" + repo;
+              if (tried.has(ak)) continue;
+              tried.add(ak);
+              try {
+                const { response: ra, url: ua } = await gxFetchUrl(mk(cdn, alt, repo));
+                if (ra.ok) {
+                  gxRepoHintSet(directory, repo);
+                  return { response: ra, url: ua, source: alt, repo };
+                }
+                lastErr = new Error(`HTTP ${ra.status} from ${alt}/${repo}`);
+              } catch (eAlt) { lastErr = eAlt; }
+            }
+          }
           // Alt load: jsDelivr 403 (e.g. file too big) -> try raw GitHub for this
           // same source/repo right away instead of walking every jsDelivr repo first.
           if (cdn && res.status === 403 && window.__gxAltLoad) {
@@ -436,12 +467,17 @@ async function gxLoadThumb(img, directory, image) {
   const bucket = gxBucketFor(directory);
   const repos = [bucket, ...GX_EXTRA_REPOS];
   const hint = gxRepoHintGet(directory);
+  // Sources are tried one at a time (repos within a source still race in
+  // parallel), so extra mirrors only get hit if the earlier source misses.
   const tryList = async (cdn, list) => {
-    const jobs = [];
-    for (const source of GX_SOURCES)
-      for (const repo of list)
-        jobs.push(gxProbeImage(gxThumbUrl(cdn, source, repo, directory, file)).then(r => ({ ...r, repo })));
-    return Promise.any(jobs);
+    let lastErr = null;
+    for (const source of GX_SOURCES) {
+      try {
+        return await Promise.any(list.map(repo =>
+          gxProbeImage(gxThumbUrl(cdn, source, repo, directory, file)).then(r => ({ ...r, repo }))));
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("No sources configured");
   };
   try {
     let hit;
