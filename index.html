@@ -715,9 +715,34 @@ try{document.addEventListener('error',function(e){
   t.setAttribute(a,raw);
   if(tn==='SOURCE'&&t.parentNode&&t.parentNode.load)try{t.parentNode.load();}catch(x){}
 },true);}catch(e){}
+})();<\/script><script>(function(){
+if(window.__gxEjs)return;window.__gxEjs=1;
+var V='4.2.3',N='https://cdn.jsdelivr.net/npm/@emulatorjs/',A='https://cdn.emulatorjs.org/',B=N+'emulatorjs@'+V+'/data/';
+function map(u){try{
+u=String(u);var r=null;
+if(u.indexOf(A)===0){var i=u.indexOf('/data/');if(i<0)return null;r=u.slice(i+6);}
+else if(u.indexOf(N+'emulatorjs@')===0){var j=u.indexOf('/data/');if(j<0)return null;r=u.slice(j+6);}
+else return null;
+var q=r.split('?')[0];
+if(q.indexOf('cores/')===0&&q.slice(-10)==='-wasm.data'){
+var f=q.slice(6),c=f.slice(0,-10).replace('-legacy','').replace('-thread','');
+return N+'core-'+c+'@'+V+'/'+f;}
+return B+r;
+}catch(e){return null;}}
+var F=window.fetch;
+if(F)window.fetch=function(i,o){var u=(i&&i.url)||i,n=map(u);
+if(n){try{i=(i&&i.url)?new Request(n,i):n;}catch(e){i=n;}}
+return F.call(this,i,o);};
+var P=window.XMLHttpRequest&&XMLHttpRequest.prototype;
+if(P){var XO=P.open;P.open=function(m,u){var n=map(u);if(n)arguments[1]=n;return XO.apply(this,arguments);};}
+function gx(C,a){try{var d=Object.getOwnPropertyDescriptor(C.prototype,a);if(d&&d.set)Object.defineProperty(C.prototype,a,{get:d.get,configurable:true,enumerable:d.enumerable,set:function(v){var n=map(v);d.set.call(this,n||v);}});}catch(e){}}
+gx(HTMLScriptElement,'src');gx(HTMLLinkElement,'href');
+try{var SA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(k,v){if((k==='src'||k==='href')&&this.tagName&&(this.tagName==='SCRIPT'||this.tagName==='LINK')){var n=map(v);if(n)v=n;}return SA.call(this,k,v);};}catch(e){}
 })();<\/script>`;
 
+  function gxEjsRewrite(html){return html.replace(/(?:https?:)?\/\/cdn\.emulatorjs\.org\/[^\/"'\s]+\/data(?=[\/"'\s?]|$)/g,'https://cdn.jsdelivr.net/npm/@emulatorjs/emulatorjs@4.2.3/data');}
   function withBaseAndPolyfill(html, baseHref) {
+    html = gxEjsRewrite(html);
     const inject = `<base href="${baseHref}">` + GX_STORAGE_POLYFILL;
     if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => m + inject);
     if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, m => m + `<head>${inject}</head>`);
@@ -1098,9 +1123,34 @@ try{document.addEventListener('error',function(e){
   t.setAttribute(a,raw);
   if(tn==='SOURCE'&&t.parentNode&&t.parentNode.load)try{t.parentNode.load();}catch(x){}
 },true);}catch(e){}
+})();<\/script><script>(function(){
+if(window.__gxEjs)return;window.__gxEjs=1;
+var V='4.2.3',N='https://cdn.jsdelivr.net/npm/@emulatorjs/',A='https://cdn.emulatorjs.org/',B=N+'emulatorjs@'+V+'/data/';
+function map(u){try{
+u=String(u);var r=null;
+if(u.indexOf(A)===0){var i=u.indexOf('/data/');if(i<0)return null;r=u.slice(i+6);}
+else if(u.indexOf(N+'emulatorjs@')===0){var j=u.indexOf('/data/');if(j<0)return null;r=u.slice(j+6);}
+else return null;
+var q=r.split('?')[0];
+if(q.indexOf('cores/')===0&&q.slice(-10)==='-wasm.data'){
+var f=q.slice(6),c=f.slice(0,-10).replace('-legacy','').replace('-thread','');
+return N+'core-'+c+'@'+V+'/'+f;}
+return B+r;
+}catch(e){return null;}}
+var F=window.fetch;
+if(F)window.fetch=function(i,o){var u=(i&&i.url)||i,n=map(u);
+if(n){try{i=(i&&i.url)?new Request(n,i):n;}catch(e){i=n;}}
+return F.call(this,i,o);};
+var P=window.XMLHttpRequest&&XMLHttpRequest.prototype;
+if(P){var XO=P.open;P.open=function(m,u){var n=map(u);if(n)arguments[1]=n;return XO.apply(this,arguments);};}
+function gx(C,a){try{var d=Object.getOwnPropertyDescriptor(C.prototype,a);if(d&&d.set)Object.defineProperty(C.prototype,a,{get:d.get,configurable:true,enumerable:d.enumerable,set:function(v){var n=map(v);d.set.call(this,n||v);}});}catch(e){}}
+gx(HTMLScriptElement,'src');gx(HTMLLinkElement,'href');
+try{var SA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(k,v){if((k==='src'||k==='href')&&this.tagName&&(this.tagName==='SCRIPT'||this.tagName==='LINK')){var n=map(v);if(n)v=n;}return SA.call(this,k,v);};}catch(e){}
 })();<\/script>`;
 
+  function gxEjsRewrite(html){return html.replace(/(?:https?:)?\/\/cdn\.emulatorjs\.org\/[^\/"'\s]+\/data(?=[\/"'\s?]|$)/g,'https://cdn.jsdelivr.net/npm/@emulatorjs/emulatorjs@4.2.3/data');}
   function withBaseAndPolyfill(html, baseHref) {
+    html = gxEjsRewrite(html);
     // Apps-only: many app entries are a bare <iframe> with no <html>/
     // <head>/<body> at all. The browser auto-generates an empty <body>
     // for that, which has no explicit height — so height="100%" on a
