@@ -296,9 +296,15 @@ async function gxFetchFromSources(directory, file) {
     try {
       const win = await Promise.any(repos.map(async (repo, i) => {
         const u = mk(true, GX_SOURCES[0], repo);
-        const res = await fetch(u, { signal: ctrls[i].signal });
+        let res = await fetch(u, { signal: ctrls[i].signal });
+        let finalUrl = u;
+        // jsDelivr 403 = file exists but is too big for it: go straight to raw GitHub for this repo.
+        if (res.status === 403) {
+          finalUrl = mk(false, GX_SOURCES[0], repo);
+          res = await fetch(finalUrl, { signal: ctrls[i].signal });
+        }
         if (!res.ok) throw new Error("HTTP " + res.status);
-        return { response: res, url: u, source: GX_SOURCES[0], repo, i };
+        return { response: res, url: finalUrl, source: GX_SOURCES[0], repo, i };
       }));
       ctrls.forEach((c, i) => { if (i !== win.i) c.abort(); });
       gxRepoHintSet(directory, win.repo);
@@ -341,7 +347,7 @@ async function gxFetchFromSources(directory, file) {
           }
           // Alt load: jsDelivr 403 (e.g. file too big) -> try raw GitHub for this
           // same source/repo right away instead of walking every jsDelivr repo first.
-          if (cdn && res.status === 403 && window.__gxAltLoad) {
+          if (cdn && res.status === 403) {
             try {
               const { response: r2, url: u2 } = await gxFetchUrl(mk(false, source, repo));
               if (r2.ok) {
@@ -372,7 +378,7 @@ async function gxFetchAppFromSources(directory, file) {
       const { response: res, url: finalUrl } = await gxFetchUrl(url);
       if (res.ok) return { response: res, url: finalUrl, source };
       lastErr = new Error(`HTTP ${res.status} from ${source}`);
-      if (res.status === 403 && window.__gxAltLoad) {
+      if (res.status === 403) {
         try {
           const { response: r2, url: u2 } = await gxFetchUrl(gxBuildAppRawUrl(source, directory, file));
           if (r2.ok) return { response: r2, url: u2, source };
@@ -672,6 +678,11 @@ window.GX_Resolver = {
       get length(){return Object.keys(s).length;}
     },writable:false});
   }
+}());<\/script><script>(function(){
+try{window.indexedDB.open('__t');}catch(e){
+  window.EJS_disableDatabases=true;
+  try{Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true});}catch(x){}
+}
 }());<\/script><script>(function(){
 if(window.__gxRaw403)return;window.__gxRaw403=1;
 var JD=/^https:\\/\\/cdn\\.jsdelivr\\.net\\/gh\\/([^\\/]+)\\/([^\\/@]+)(?:@[^\\/]+)?\\/(.+)$/i;
@@ -1080,6 +1091,11 @@ window.GX_APPS_READY.then(loadedApps => {
       get length(){return Object.keys(s).length;}
     },writable:false});
   }
+}());<\/script><script>(function(){
+try{window.indexedDB.open('__t');}catch(e){
+  window.EJS_disableDatabases=true;
+  try{Object.defineProperty(window,'indexedDB',{value:undefined,configurable:true});}catch(x){}
+}
 }());<\/script><script>(function(){
 if(window.__gxRaw403)return;window.__gxRaw403=1;
 var JD=/^https:\\/\\/cdn\\.jsdelivr\\.net\\/gh\\/([^\\/]+)\\/([^\\/@]+)(?:@[^\\/]+)?\\/(.+)$/i;
